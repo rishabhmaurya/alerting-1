@@ -30,6 +30,7 @@ import org.opensearch.OpenSearchStatusException
 import org.opensearch.action.ActionListener
 import org.opensearch.action.delete.DeleteRequest
 import org.opensearch.action.delete.DeleteResponse
+import org.opensearch.action.search.SearchResponse
 import org.opensearch.action.support.ActionFilters
 import org.opensearch.action.support.HandledTransportAction
 import org.opensearch.alerting.action.DeleteEmailAccountAction
@@ -41,7 +42,10 @@ import org.opensearch.alerting.util.DestinationType
 import org.opensearch.client.Client
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.settings.Settings
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.rest.RestStatus
 import org.opensearch.tasks.Task
 import org.opensearch.transport.TransportService
@@ -51,9 +55,10 @@ class TransportDeleteEmailAccountAction @Inject constructor(
     val client: Client,
     actionFilters: ActionFilters,
     val clusterService: ClusterService,
-    settings: Settings
-) : HandledTransportAction<DeleteEmailAccountRequest, DeleteResponse>(
-    DeleteEmailAccountAction.NAME, transportService, actionFilters, ::DeleteEmailAccountRequest
+    settings: Settings,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<DeleteEmailAccountRequest, DeleteResponse>(
+    DeleteEmailAccountAction.NAME, transportService, actionFilters, ::DeleteEmailAccountRequest, extensionService.isEsCluster
 ) {
 
     @Volatile private var allowList = ALLOW_LIST.get(settings)
@@ -62,7 +67,7 @@ class TransportDeleteEmailAccountAction @Inject constructor(
         clusterService.clusterSettings.addSettingsUpdateConsumer(ALLOW_LIST) { allowList = it }
     }
 
-    override fun doExecute(task: Task, request: DeleteEmailAccountRequest, actionListener: ActionListener<DeleteResponse>) {
+    override fun doExecuteExtension(task: Task, request: DeleteEmailAccountRequest, actionListener: ActionListener<DeleteResponse>) {
 
         if (!allowList.contains(DestinationType.EMAIL.value)) {
             actionListener.onFailure(
@@ -92,5 +97,9 @@ class TransportDeleteEmailAccountAction @Inject constructor(
                 }
             )
         }
+    }
+
+    override fun readFromStream(sin: StreamInput): DeleteResponse {
+        return DeleteResponse(sin)
     }
 }

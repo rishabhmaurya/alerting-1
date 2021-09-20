@@ -36,6 +36,7 @@ import org.opensearch.action.support.HandledTransportAction
 import org.opensearch.alerting.action.GetEmailAccountAction
 import org.opensearch.alerting.action.GetEmailAccountRequest
 import org.opensearch.alerting.action.GetEmailAccountResponse
+import org.opensearch.alerting.action.IndexEmailAccountResponse
 import org.opensearch.alerting.core.model.ScheduledJob.Companion.SCHEDULED_JOBS_INDEX
 import org.opensearch.alerting.model.destination.email.EmailAccount
 import org.opensearch.alerting.settings.DestinationSettings.Companion.ALLOW_LIST
@@ -44,11 +45,14 @@ import org.opensearch.alerting.util.DestinationType
 import org.opensearch.client.Client
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.settings.Settings
 import org.opensearch.common.xcontent.LoggingDeprecationHandler
 import org.opensearch.common.xcontent.NamedXContentRegistry
 import org.opensearch.common.xcontent.XContentHelper
 import org.opensearch.common.xcontent.XContentType
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.rest.RestStatus
 import org.opensearch.tasks.Task
 import org.opensearch.transport.TransportService
@@ -61,9 +65,10 @@ class TransportGetEmailAccountAction @Inject constructor(
     actionFilters: ActionFilters,
     val clusterService: ClusterService,
     settings: Settings,
-    val xContentRegistry: NamedXContentRegistry
-) : HandledTransportAction<GetEmailAccountRequest, GetEmailAccountResponse>(
-    GetEmailAccountAction.NAME, transportService, actionFilters, ::GetEmailAccountRequest
+    val xContentRegistry: NamedXContentRegistry,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<GetEmailAccountRequest, GetEmailAccountResponse>(
+    GetEmailAccountAction.NAME, transportService, actionFilters, ::GetEmailAccountRequest, extensionService.isEsCluster
 ) {
 
     @Volatile private var allowList = ALLOW_LIST.get(settings)
@@ -72,7 +77,7 @@ class TransportGetEmailAccountAction @Inject constructor(
         clusterService.clusterSettings.addSettingsUpdateConsumer(ALLOW_LIST) { allowList = it }
     }
 
-    override fun doExecute(
+    override fun doExecuteExtension(
         task: Task,
         getEmailAccountRequest: GetEmailAccountRequest,
         actionListener: ActionListener<GetEmailAccountResponse>
@@ -131,5 +136,10 @@ class TransportGetEmailAccountAction @Inject constructor(
                 }
             )
         }
+    }
+
+
+    override fun readFromStream(sin: StreamInput): GetEmailAccountResponse {
+        return GetEmailAccountResponse(sin)
     }
 }

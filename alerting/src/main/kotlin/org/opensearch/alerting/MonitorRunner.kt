@@ -119,13 +119,13 @@ class MonitorRunner(
     private val xContentRegistry: NamedXContentRegistry,
     private val alertIndices: AlertIndices,
     clusterService: ClusterService
-) : JobRunner, CoroutineScope, AbstractLifecycleComponent() {
+) : CoroutineScope, AbstractLifecycleComponent() {
 
     private val logger = LogManager.getLogger(MonitorRunner::class.java)
 
-    private lateinit var runnerSupervisor: Job
+    //private lateinit var runnerSupervisor: Job
     override val coroutineContext: CoroutineContext
-        get() = Dispatchers.Default + runnerSupervisor
+        get() = Dispatchers.Default
 
     @Volatile private var retryPolicy =
         BackoffPolicy.constantBackoff(ALERT_BACKOFF_MILLIS.get(settings), ALERT_BACKOFF_COUNT.get(settings))
@@ -161,15 +161,16 @@ class MonitorRunner(
     }
 
     override fun doStart() {
-        runnerSupervisor = SupervisorJob()
+        //runnerSupervisor = SupervisorJob()
     }
 
     override fun doStop() {
-        runnerSupervisor.cancel()
+        //runnerSupervisor.cancel()
     }
 
     override fun doClose() { }
 
+    /*
     override fun postIndex(job: ScheduledJob) {
         if (job !is Monitor) {
             throw IllegalArgumentException("Invalid job type")
@@ -187,6 +188,7 @@ class MonitorRunner(
             }
         }
     }
+
 
     override fun postDelete(jobId: String) {
         launch {
@@ -209,7 +211,7 @@ class MonitorRunner(
 
         launch { runMonitor(job, periodStart, periodEnd) }
     }
-
+    */
     suspend fun runMonitor(monitor: Monitor, periodStart: Instant, periodEnd: Instant, dryrun: Boolean = false): MonitorRunResult {
         /*
          * We need to handle 3 cases:

@@ -46,6 +46,7 @@ import org.opensearch.alerting.util.checkUserFilterByPermissions
 import org.opensearch.client.Client
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.settings.Settings
 import org.opensearch.common.xcontent.LoggingDeprecationHandler
 import org.opensearch.common.xcontent.NamedXContentRegistry
@@ -55,6 +56,8 @@ import org.opensearch.common.xcontent.XContentParserUtils
 import org.opensearch.common.xcontent.XContentType
 import org.opensearch.commons.ConfigConstants
 import org.opensearch.commons.authuser.User
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.rest.RestStatus
 import org.opensearch.tasks.Task
 import org.opensearch.transport.TransportService
@@ -68,9 +71,10 @@ class TransportDeleteDestinationAction @Inject constructor(
     actionFilters: ActionFilters,
     val clusterService: ClusterService,
     settings: Settings,
-    val xContentRegistry: NamedXContentRegistry
-) : HandledTransportAction<DeleteDestinationRequest, DeleteResponse>(
-    DeleteDestinationAction.NAME, transportService, actionFilters, ::DeleteDestinationRequest
+    val xContentRegistry: NamedXContentRegistry,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<DeleteDestinationRequest, DeleteResponse>(
+    DeleteDestinationAction.NAME, transportService, actionFilters, ::DeleteDestinationRequest, extensionService.isEsCluster
 ) {
 
     @Volatile private var filterByEnabled = AlertingSettings.FILTER_BY_BACKEND_ROLES.get(settings)
@@ -79,7 +83,7 @@ class TransportDeleteDestinationAction @Inject constructor(
         clusterService.clusterSettings.addSettingsUpdateConsumer(AlertingSettings.FILTER_BY_BACKEND_ROLES) { filterByEnabled = it }
     }
 
-    override fun doExecute(task: Task, request: DeleteDestinationRequest, actionListener: ActionListener<DeleteResponse>) {
+    override fun doExecuteExtension(task: Task, request: DeleteDestinationRequest, actionListener: ActionListener<DeleteResponse>) {
         val userStr = client.threadPool().threadContext.getTransient<String>(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT)
         log.debug("User and roles string from thread context: $userStr")
         val user: User? = User.parse(userStr)
@@ -174,5 +178,9 @@ class TransportDeleteDestinationAction @Inject constructor(
                 }
             )
         }
+    }
+
+    override fun readFromStream(sin: StreamInput): DeleteResponse {
+        return DeleteResponse(sin)
     }
 }

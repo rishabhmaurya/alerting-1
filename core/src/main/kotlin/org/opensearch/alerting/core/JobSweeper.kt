@@ -163,6 +163,7 @@ class JobSweeper(
      * we perform the sweep in the background in a single threaded executor [fullSweepExecutor].
      */
     override fun clusterChanged(event: ClusterChangedEvent) {
+        /*
         if (!isSweepingEnabled()) return
 
         if (!event.indexRoutingTableChanged(ScheduledJob.SCHEDULED_JOBS_INDEX)) return
@@ -171,6 +172,8 @@ class JobSweeper(
         fullSweepExecutor.submit {
             sweepAllShards()
         }
+
+         */
     }
 
     /**
@@ -273,7 +276,7 @@ class JobSweeper(
 
     private fun sweepAllShards() {
         val clusterState = clusterService.state()
-        if (!clusterState.routingTable.hasIndex(ScheduledJob.SCHEDULED_JOBS_INDEX)) {
+        if (!clusterState.metadata.hasIndex(ScheduledJob.SCHEDULED_JOBS_INDEX)) {
             scheduler.deschedule(scheduler.scheduledJobs())
             sweptJobs.clear()
             lastFullSweepTimeNano = System.nanoTime()

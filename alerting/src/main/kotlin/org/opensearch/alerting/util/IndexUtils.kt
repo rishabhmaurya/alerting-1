@@ -105,6 +105,7 @@ class IndexUtils {
 
         @JvmStatic
         fun getIndexNameWithAlias(clusterState: ClusterState, alias: String): String {
+            // #Use: check all indices part of metadata for alias
             return clusterState.metadata.indices.first { it.value.aliases.containsKey(alias) }.key
         }
 
@@ -132,6 +133,7 @@ class IndexUtils {
             client: IndicesAdminClient,
             actionListener: ActionListener<AcknowledgedResponse>
         ) {
+            // #USE: check if index mapping is present. Also, fetch index mapping
             if (clusterState.metadata.indices.containsKey(index)) {
                 if (shouldUpdateIndex(clusterState.metadata.indices[index], mapping)) {
                     val putMappingRequest: PutMappingRequest = PutMappingRequest(index).type(type).source(mapping, XContentType.JSON)

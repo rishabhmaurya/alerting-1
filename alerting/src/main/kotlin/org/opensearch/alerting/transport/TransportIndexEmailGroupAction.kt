@@ -30,6 +30,7 @@ import org.apache.logging.log4j.LogManager
 import org.opensearch.OpenSearchStatusException
 import org.opensearch.action.ActionListener
 import org.opensearch.action.admin.indices.create.CreateIndexResponse
+import org.opensearch.action.delete.DeleteResponse
 import org.opensearch.action.get.GetRequest
 import org.opensearch.action.get.GetResponse
 import org.opensearch.action.index.IndexRequest
@@ -48,13 +49,17 @@ import org.opensearch.alerting.settings.DestinationSettings.Companion.ALLOW_LIST
 import org.opensearch.alerting.util.AlertingException
 import org.opensearch.alerting.util.DestinationType
 import org.opensearch.alerting.util.IndexUtils
+import org.opensearch.alerting.util.getClusterState
 import org.opensearch.client.Client
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.settings.Settings
 import org.opensearch.common.xcontent.NamedXContentRegistry
 import org.opensearch.common.xcontent.ToXContent
 import org.opensearch.common.xcontent.XContentFactory.jsonBuilder
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.rest.RestRequest
 import org.opensearch.rest.RestStatus
 import org.opensearch.tasks.Task
@@ -69,9 +74,10 @@ class TransportIndexEmailGroupAction @Inject constructor(
     val scheduledJobIndices: ScheduledJobIndices,
     val clusterService: ClusterService,
     settings: Settings,
-    val xContentRegistry: NamedXContentRegistry
-) : HandledTransportAction<IndexEmailGroupRequest, IndexEmailGroupResponse>(
-    IndexEmailGroupAction.NAME, transportService, actionFilters, ::IndexEmailGroupRequest
+    val xContentRegistry: NamedXContentRegistry,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<IndexEmailGroupRequest, IndexEmailGroupResponse>(
+    IndexEmailGroupAction.NAME, transportService, actionFilters, ::IndexEmailGroupRequest, extensionService.isEsCluster
 ) {
 
     @Volatile private var indexTimeout = INDEX_TIMEOUT.get(settings)
@@ -82,7 +88,7 @@ class TransportIndexEmailGroupAction @Inject constructor(
         clusterService.clusterSettings.addSettingsUpdateConsumer(ALLOW_LIST) { allowList = it }
     }
 
-    override fun doExecute(task: Task, request: IndexEmailGroupRequest, actionListener: ActionListener<IndexEmailGroupResponse>) {
+    override fun doExecuteExtension(task: Task, request: IndexEmailGroupRequest, actionListener: ActionListener<IndexEmailGroupResponse>) {
         client.threadPool().threadContext.stashContext().use {
             IndexEmailGroupHandler(client, actionListener, request).start()
         }
@@ -102,7 +108,7 @@ class TransportIndexEmailGroupAction @Inject constructor(
                     }
 
                     override fun onFailure(e: Exception) {
-                        actionListener.onFailure(e)
+                        //actionListener.onFailure(e)
                     }
                 })
             } else if (!IndexUtils.scheduledJobIndexUpdated) {
@@ -263,5 +269,9 @@ class TransportIndexEmailGroupAction @Inject constructor(
 
             return null
         }
+    }
+
+    override fun readFromStream(sin: StreamInput): IndexEmailGroupResponse {
+        return IndexEmailGroupResponse(sin)
     }
 }

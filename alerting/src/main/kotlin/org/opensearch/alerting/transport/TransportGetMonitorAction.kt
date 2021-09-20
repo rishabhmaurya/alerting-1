@@ -32,7 +32,6 @@ import org.opensearch.action.ActionListener
 import org.opensearch.action.get.GetRequest
 import org.opensearch.action.get.GetResponse
 import org.opensearch.action.support.ActionFilters
-import org.opensearch.action.support.HandledTransportAction
 import org.opensearch.alerting.action.GetMonitorAction
 import org.opensearch.alerting.action.GetMonitorRequest
 import org.opensearch.alerting.action.GetMonitorResponse
@@ -45,6 +44,7 @@ import org.opensearch.alerting.util.checkUserFilterByPermissions
 import org.opensearch.client.Client
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.settings.Settings
 import org.opensearch.common.xcontent.LoggingDeprecationHandler
 import org.opensearch.common.xcontent.NamedXContentRegistry
@@ -52,6 +52,8 @@ import org.opensearch.common.xcontent.XContentHelper
 import org.opensearch.common.xcontent.XContentType
 import org.opensearch.commons.ConfigConstants
 import org.opensearch.commons.authuser.User
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.rest.RestStatus
 import org.opensearch.tasks.Task
 import org.opensearch.transport.TransportService
@@ -64,9 +66,10 @@ class TransportGetMonitorAction @Inject constructor(
     actionFilters: ActionFilters,
     val xContentRegistry: NamedXContentRegistry,
     val clusterService: ClusterService,
-    settings: Settings
-) : HandledTransportAction<GetMonitorRequest, GetMonitorResponse> (
-    GetMonitorAction.NAME, transportService, actionFilters, ::GetMonitorRequest
+    settings: Settings,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<GetMonitorRequest, GetMonitorResponse> (
+    GetMonitorAction.NAME, transportService, actionFilters, ::GetMonitorRequest, extensionService.isEsCluster
 ) {
 
     @Volatile private var filterByEnabled = AlertingSettings.FILTER_BY_BACKEND_ROLES.get(settings)
@@ -75,7 +78,7 @@ class TransportGetMonitorAction @Inject constructor(
         clusterService.clusterSettings.addSettingsUpdateConsumer(AlertingSettings.FILTER_BY_BACKEND_ROLES) { filterByEnabled = it }
     }
 
-    override fun doExecute(task: Task, getMonitorRequest: GetMonitorRequest, actionListener: ActionListener<GetMonitorResponse>) {
+    override fun doExecuteExtension(task: Task, getMonitorRequest: GetMonitorRequest, actionListener: ActionListener<GetMonitorResponse>) {
         val userStr = client.threadPool().threadContext.getTransient<String>(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT)
         log.debug("User and roles string from thread context: $userStr")
         val user: User? = User.parse(userStr)
@@ -140,5 +143,9 @@ class TransportGetMonitorAction @Inject constructor(
                 }
             )
         }
+    }
+
+    override fun readFromStream(sin: StreamInput): GetMonitorResponse {
+        return GetMonitorResponse(sin)
     }
 }

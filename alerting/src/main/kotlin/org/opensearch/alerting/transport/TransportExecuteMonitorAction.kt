@@ -25,17 +25,22 @@ import org.opensearch.alerting.MonitorRunner
 import org.opensearch.alerting.action.ExecuteMonitorAction
 import org.opensearch.alerting.action.ExecuteMonitorRequest
 import org.opensearch.alerting.action.ExecuteMonitorResponse
+import org.opensearch.alerting.action.GetMonitorResponse
 import org.opensearch.alerting.core.model.ScheduledJob
+import org.opensearch.alerting.elasticapi.ElasticThreadContextElement
 import org.opensearch.alerting.model.Monitor
 import org.opensearch.alerting.util.AlertingException
 import org.opensearch.client.Client
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.xcontent.LoggingDeprecationHandler
 import org.opensearch.common.xcontent.NamedXContentRegistry
 import org.opensearch.common.xcontent.XContentHelper
 import org.opensearch.common.xcontent.XContentType
 import org.opensearch.commons.ConfigConstants
 import org.opensearch.commons.authuser.User
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.rest.RestStatus
 import org.opensearch.tasks.Task
 import org.opensearch.transport.TransportService
@@ -48,12 +53,13 @@ class TransportExecuteMonitorAction @Inject constructor(
     private val client: Client,
     private val runner: MonitorRunner,
     actionFilters: ActionFilters,
-    val xContentRegistry: NamedXContentRegistry
-) : HandledTransportAction<ExecuteMonitorRequest, ExecuteMonitorResponse> (
-    ExecuteMonitorAction.NAME, transportService, actionFilters, ::ExecuteMonitorRequest
+    val xContentRegistry: NamedXContentRegistry,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<ExecuteMonitorRequest, ExecuteMonitorResponse> (
+    ExecuteMonitorAction.NAME, transportService, actionFilters, ::ExecuteMonitorRequest, extensionService.isEsCluster
 ) {
 
-    override fun doExecute(task: Task, execMonitorRequest: ExecuteMonitorRequest, actionListener: ActionListener<ExecuteMonitorResponse>) {
+    override fun doExecuteExtension(task: Task, execMonitorRequest: ExecuteMonitorRequest, actionListener: ActionListener<ExecuteMonitorResponse>) {
 
         val userStr = client.threadPool().threadContext.getTransient<String>(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT)
         log.debug("User and roles string from thread context: $userStr")
@@ -61,21 +67,23 @@ class TransportExecuteMonitorAction @Inject constructor(
 
         client.threadPool().threadContext.stashContext().use {
             val executeMonitor = fun(monitor: Monitor) {
+
                 // Launch the coroutine with the clients threadContext. This is needed to preserve authentication information
                 // stored on the threadContext set by the security plugin when using the Alerting plugin with the Security plugin.
-                // runner.launch(ElasticThreadContextElement(client.threadPool().threadContext)) {
-                runner.launch {
-                    val (periodStart, periodEnd) =
-                        monitor.schedule.getPeriodEndingAt(Instant.ofEpochMilli(execMonitorRequest.requestEnd.millis))
-                    try {
-                        val monitorRunResult = runner.runMonitor(monitor, periodStart, periodEnd, execMonitorRequest.dryrun)
-                        withContext(Dispatchers.IO) {
-                            actionListener.onResponse(ExecuteMonitorResponse(monitorRunResult))
-                        }
-                    } catch (e: Exception) {
-                        log.error("Unexpected error running monitor", e)
-                        withContext(Dispatchers.IO) {
-                            actionListener.onFailure(AlertingException.wrap(e))
+                runner.launch(ElasticThreadContextElement(client.threadPool().threadContext)) {
+                    runner.launch {
+                        val (periodStart, periodEnd) =
+                            monitor.schedule.getPeriodEndingAt(Instant.ofEpochMilli(execMonitorRequest.requestEnd.millis))
+                        try {
+                            val monitorRunResult = runner.runMonitor(monitor, periodStart, periodEnd, execMonitorRequest.dryrun)
+                            withContext(Dispatchers.IO) {
+                                actionListener.onResponse(ExecuteMonitorResponse(monitorRunResult))
+                            }
+                        } catch (e: Exception) {
+                            log.error("Unexpected error running monitor", e)
+                            withContext(Dispatchers.IO) {
+                                actionListener.onFailure(AlertingException.wrap(e))
+                            }
                         }
                     }
                 }
@@ -119,5 +127,9 @@ class TransportExecuteMonitorAction @Inject constructor(
                 executeMonitor(monitor)
             }
         }
+    }
+
+    override fun readFromStream(sin: StreamInput): ExecuteMonitorResponse {
+        return ExecuteMonitorResponse(sin)
     }
 }

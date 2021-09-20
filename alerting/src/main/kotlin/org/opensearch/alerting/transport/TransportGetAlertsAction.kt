@@ -35,6 +35,7 @@ import org.opensearch.action.support.HandledTransportAction
 import org.opensearch.alerting.action.GetAlertsAction
 import org.opensearch.alerting.action.GetAlertsRequest
 import org.opensearch.alerting.action.GetAlertsResponse
+import org.opensearch.alerting.action.GetDestinationsResponse
 import org.opensearch.alerting.alerts.AlertIndices
 import org.opensearch.alerting.elasticapi.addFilter
 import org.opensearch.alerting.model.Alert
@@ -43,6 +44,7 @@ import org.opensearch.alerting.util.AlertingException
 import org.opensearch.client.Client
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.settings.Settings
 import org.opensearch.common.xcontent.LoggingDeprecationHandler
 import org.opensearch.common.xcontent.NamedXContentRegistry
@@ -52,6 +54,8 @@ import org.opensearch.common.xcontent.XContentParserUtils
 import org.opensearch.common.xcontent.XContentType
 import org.opensearch.commons.ConfigConstants
 import org.opensearch.commons.authuser.User
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.index.query.Operator
 import org.opensearch.index.query.QueryBuilders
 import org.opensearch.search.builder.SearchSourceBuilder
@@ -69,9 +73,10 @@ class TransportGetAlertsAction @Inject constructor(
     clusterService: ClusterService,
     actionFilters: ActionFilters,
     val settings: Settings,
-    val xContentRegistry: NamedXContentRegistry
-) : HandledTransportAction<GetAlertsRequest, GetAlertsResponse>(
-    GetAlertsAction.NAME, transportService, actionFilters, ::GetAlertsRequest
+    val xContentRegistry: NamedXContentRegistry,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<GetAlertsRequest, GetAlertsResponse>(
+    GetAlertsAction.NAME, transportService, actionFilters, ::GetAlertsRequest, extensionService.isEsCluster
 ) {
 
     @Volatile private var filterByEnabled = AlertingSettings.FILTER_BY_BACKEND_ROLES.get(settings)
@@ -80,7 +85,7 @@ class TransportGetAlertsAction @Inject constructor(
         clusterService.clusterSettings.addSettingsUpdateConsumer(AlertingSettings.FILTER_BY_BACKEND_ROLES) { filterByEnabled = it }
     }
 
-    override fun doExecute(
+    override fun doExecuteExtension(
         task: Task,
         getAlertsRequest: GetAlertsRequest,
         actionListener: ActionListener<GetAlertsResponse>
@@ -185,5 +190,9 @@ class TransportGetAlertsAction @Inject constructor(
                 }
             }
         )
+    }
+
+    override fun readFromStream(sin: StreamInput): GetAlertsResponse {
+        return GetAlertsResponse(sin)
     }
 }

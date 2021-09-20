@@ -55,7 +55,7 @@ data class MonitorRunResult(
         sin.readInstant(), // periodEnd
         sin.readException(), // error
         InputRunResults.readFrom(sin), // inputResults
-        suppressWarning(sin.readMap()) // triggerResults
+        readTriggerResultsMap(sin)
     )
 
     override fun toXContent(builder: XContentBuilder, params: ToXContent.Params): XContentBuilder {
@@ -96,6 +96,15 @@ data class MonitorRunResult(
         fun suppressWarning(map: MutableMap<String?, Any?>?): Map<String, TriggerRunResult> {
             return map as Map<String, TriggerRunResult>
         }
+
+        fun readTriggerResultsMap(sin: StreamInput): Map<String, TriggerRunResult>  {
+            val size: Int = sin.readVInt()
+            val triggerRunResult = java.util.HashMap<String, TriggerRunResult>()
+            for (i in 0 until size) {
+                triggerRunResult[sin.readString()] = TriggerRunResult(sin)
+            }
+            return triggerRunResult
+        }
     }
 
     @Throws(IOException::class)
@@ -105,7 +114,11 @@ data class MonitorRunResult(
         out.writeInstant(periodEnd)
         out.writeException(error)
         inputResults.writeTo(out)
-        out.writeMap(triggerResults)
+        out.writeVInt(triggerResults.size)
+        for ((key, value) in triggerResults) {
+            out.writeString(key)
+            value.writeTo(out)
+        }
     }
 }
 
@@ -158,7 +171,7 @@ data class TriggerRunResult(
         sin.readString(), // triggerName
         sin.readBoolean(), // triggered
         sin.readException(), // error
-        suppressWarning(sin.readMap()) // actionResults
+        readActionResultsMap(sin)
     )
 
     override fun toXContent(builder: XContentBuilder, params: ToXContent.Params): XContentBuilder {
@@ -190,7 +203,11 @@ data class TriggerRunResult(
         out.writeString(triggerName)
         out.writeBoolean(triggered)
         out.writeException(error)
-        out.writeMap(actionResults as Map<String, ActionRunResult>)
+        out.writeVInt(actionResults.size)
+        for ((key, value) in actionResults) {
+            out.writeString(key)
+            value.writeTo(out)
+        }
     }
 
     companion object {
@@ -203,6 +220,15 @@ data class TriggerRunResult(
         @Suppress("UNCHECKED_CAST")
         fun suppressWarning(map: MutableMap<String?, Any?>?): MutableMap<String, ActionRunResult> {
             return map as MutableMap<String, ActionRunResult>
+        }
+
+        fun readActionResultsMap(sin: StreamInput): MutableMap<String, ActionRunResult>  {
+            val size: Int = sin.readVInt()
+            val actionRunResult = java.util.HashMap<String, ActionRunResult>()
+            for (i in 0 until size) {
+                actionRunResult[sin.readString()] = ActionRunResult(sin)
+            }
+            return actionRunResult
         }
     }
 }

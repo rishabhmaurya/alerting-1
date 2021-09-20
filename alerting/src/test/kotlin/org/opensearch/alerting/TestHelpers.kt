@@ -204,7 +204,7 @@ fun randomActionExecutionResult(
 fun randomMonitorRunResult(): MonitorRunResult {
     val triggerResults = mutableMapOf<String, TriggerRunResult>()
     val triggerRunResult = randomTriggerRunResult()
-    triggerResults.plus(Pair("test", triggerRunResult))
+    triggerResults["test"] = triggerRunResult
 
     return MonitorRunResult(
         "test-monitor",
@@ -222,15 +222,15 @@ fun randomInputRunResults(): InputRunResults {
 
 fun randomTriggerRunResult(): TriggerRunResult {
     val map = mutableMapOf<String, ActionRunResult>()
-    map.plus(Pair("key1", randomActionRunResult()))
-    map.plus(Pair("key2", randomActionRunResult()))
+    map.put("key1", randomActionRunResult())
+    map.put("key2", randomActionRunResult())
     return TriggerRunResult("trigger-name", true, null, map)
 }
 
 fun randomActionRunResult(): ActionRunResult {
     val map = mutableMapOf<String, String>()
-    map.plus(Pair("key1", "val1"))
-    map.plus(Pair("key2", "val2"))
+    map.put("key1", "val1")
+    map.put("key2", "val2")
     return ActionRunResult(
         "1234", "test-action", map,
         false, Instant.now(), null

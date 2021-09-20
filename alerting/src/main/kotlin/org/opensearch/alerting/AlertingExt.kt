@@ -1,28 +1,3 @@
-/*
- * SPDX-License-Identifier: Apache-2.0
- *
- * The OpenSearch Contributors require contributions made to
- * this file be licensed under the Apache-2.0 license or a
- * compatible open source license.
- *
- * Modifications Copyright OpenSearch Contributors. See
- * GitHub history for details.
- */
-
-/*
- *   Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
- *
- *   Licensed under the Apache License, Version 2.0 (the "License").
- *   You may not use this file except in compliance with the License.
- *   A copy of the License is located at
- *
- *       http://www.apache.org/licenses/LICENSE-2.0
- *
- *   or in the "license" file accompanying this file. This file is distributed
- *   on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- *   express or implied. See the License for the specific language governing
- *   permissions and limitations under the License.
- */
 package org.opensearch.alerting
 
 import org.opensearch.action.ActionRequest
@@ -46,14 +21,9 @@ import org.opensearch.alerting.action.SearchEmailAccountAction
 import org.opensearch.alerting.action.SearchEmailGroupAction
 import org.opensearch.alerting.action.SearchMonitorAction
 import org.opensearch.alerting.alerts.AlertIndices
-import org.opensearch.alerting.core.JobSweeper
 import org.opensearch.alerting.core.ScheduledJobIndices
-import org.opensearch.alerting.core.action.node.ScheduledJobsStatsAction
-import org.opensearch.alerting.core.action.node.ScheduledJobsStatsTransportAction
-import org.opensearch.alerting.core.model.ScheduledJob
 import org.opensearch.alerting.core.model.SearchInput
 import org.opensearch.alerting.core.resthandler.RestScheduledJobStatsHandler
-import org.opensearch.alerting.core.schedule.JobScheduler
 import org.opensearch.alerting.core.settings.LegacyOpenDistroScheduledJobSettings
 import org.opensearch.alerting.core.settings.ScheduledJobSettings
 import org.opensearch.alerting.model.Monitor
@@ -111,36 +81,27 @@ import org.opensearch.common.settings.SettingsFilter
 import org.opensearch.common.xcontent.NamedXContentRegistry
 import org.opensearch.env.Environment
 import org.opensearch.env.NodeEnvironment
-import org.opensearch.index.IndexModule
+import org.opensearch.extensions.Extension
 import org.opensearch.painless.spi.PainlessExtension
 import org.opensearch.painless.spi.Whitelist
 import org.opensearch.painless.spi.WhitelistLoader
 import org.opensearch.plugins.ActionPlugin
-import org.opensearch.plugins.Plugin
-import org.opensearch.plugins.ReloadablePlugin
 import org.opensearch.plugins.ScriptPlugin
-import org.opensearch.repositories.RepositoriesService
 import org.opensearch.rest.RestController
 import org.opensearch.rest.RestHandler
 import org.opensearch.script.ScriptContext
 import org.opensearch.script.ScriptService
 import org.opensearch.threadpool.ThreadPool
-import org.opensearch.watcher.ResourceWatcherService
+import java.util.*
 import java.util.function.Supplier
 
-/**
- * Entry point of the OpenDistro for Elasticsearch alerting plugin
- * This class initializes the [RestGetMonitorAction], [RestDeleteMonitorAction], [RestIndexMonitorAction] rest handlers.
- * It also adds [Monitor.XCONTENT_REGISTRY], [SearchInput.XCONTENT_REGISTRY] to the
- * [NamedXContentRegistry] so that we are able to deserialize the custom named objects.
- */
-internal class AlertingPlugin : PainlessExtension, Plugin() {
+
+class AlertingExt: ScriptPlugin, PainlessExtension, Extension() {
 
     override fun getContextWhitelists(): Map<ScriptContext<*>, List<Whitelist>> {
         val whitelist = WhitelistLoader.loadFromResourceFiles(javaClass, "org.opensearch.alerting.txt")
         return mapOf(TriggerScript.CONTEXT to listOf(whitelist))
     }
-
 
     companion object {
         @JvmField val OPEN_SEARCH_DASHBOARDS_USER_AGENT = "OpenSearch-Dashboards"
@@ -155,14 +116,12 @@ internal class AlertingPlugin : PainlessExtension, Plugin() {
         @JvmField val LEGACY_OPENDISTRO_EMAIL_GROUP_BASE_URI = "$LEGACY_OPENDISTRO_DESTINATION_BASE_URI/email_groups"
         @JvmField val ALERTING_JOB_TYPES = listOf("monitor")
     }
-    /*
+
     lateinit var runner: MonitorRunner
-    lateinit var scheduler: JobScheduler
-    lateinit var sweeper: JobSweeper
-    lateinit var scheduledJobIndices: ScheduledJobIndices
     lateinit var threadPool: ThreadPool
     lateinit var alertIndices: AlertIndices
     lateinit var clusterService: ClusterService
+    lateinit var scheduledJobIndices: ScheduledJobIndices
 
     override fun getRestHandlers(
         settings: Settings,
@@ -198,7 +157,7 @@ internal class AlertingPlugin : PainlessExtension, Plugin() {
 
     override fun getActions(): List<ActionPlugin.ActionHandler<out ActionRequest, out ActionResponse>> {
         return listOf(
-            ActionPlugin.ActionHandler(ScheduledJobsStatsAction.INSTANCE, ScheduledJobsStatsTransportAction::class.java),
+            //ActionPlugin.ActionHandler(ScheduledJobsStatsAction.INSTANCE, ScheduledJobsStatsTransportAction::class.java),
             ActionPlugin.ActionHandler(IndexDestinationAction.INSTANCE, TransportIndexDestinationAction::class.java),
             ActionPlugin.ActionHandler(IndexMonitorAction.INSTANCE, TransportIndexMonitorAction::class.java),
             ActionPlugin.ActionHandler(GetMonitorAction.INSTANCE, TransportGetMonitorAction::class.java),
@@ -226,27 +185,23 @@ internal class AlertingPlugin : PainlessExtension, Plugin() {
 
     override fun createComponents(
         client: Client,
-        clusterService: ClusterService,
+        clusterService1: ClusterService,
         threadPool: ThreadPool,
-        resourceWatcherService: ResourceWatcherService,
         scriptService: ScriptService,
         xContentRegistry: NamedXContentRegistry,
         environment: Environment,
         nodeEnvironment: NodeEnvironment,
-        namedWriteableRegistry: NamedWriteableRegistry,
-        indexNameExpressionResolver: IndexNameExpressionResolver,
-        repositoriesServiceSupplier: Supplier<RepositoriesService>
+        namedWriteableRegistry: NamedWriteableRegistry
     ): Collection<Any> {
         // Need to figure out how to use the OpenSearch DI classes rather than handwiring things here.
         val settings = environment.settings()
+        clusterService = clusterService1
         alertIndices = AlertIndices(settings, client, threadPool, clusterService)
-        runner = MonitorRunner(settings, client, threadPool, scriptService, xContentRegistry, alertIndices, clusterService)
         scheduledJobIndices = ScheduledJobIndices(client.admin(), clusterService)
-        scheduler = JobScheduler(threadPool, runner)
-        sweeper = JobSweeper(environment.settings(), client, clusterService, threadPool, xContentRegistry, scheduler, ALERTING_JOB_TYPES)
+
+        runner = MonitorRunner(settings, client, threadPool, scriptService, xContentRegistry, alertIndices, clusterService)
         this.threadPool = threadPool
-        this.clusterService = clusterService
-        return listOf(sweeper, scheduler, runner, scheduledJobIndices)
+        return listOf(runner, scheduledJobIndices)
     }
 
     override fun getSettings(): List<Setting<*>> {
@@ -306,16 +261,16 @@ internal class AlertingPlugin : PainlessExtension, Plugin() {
         )
     }
 
-    override fun onIndexModule(indexModule: IndexModule) {
-        if (indexModule.index.name == ScheduledJob.SCHEDULED_JOBS_INDEX) {
-            indexModule.addIndexOperationListener(sweeper)
-        }
-    }
-
     override fun getContexts(): List<ScriptContext<*>> {
         return listOf(TriggerScript.CONTEXT)
     }
 
+
+    override fun getSubscribedIndex(): Set<String?>? {
+        return HashSet(listOf(AlertIndices.ALL_INDEX_PATTERN, ".opendistro-alerting*"))
+    }
+
+    /*
     override fun reload(settings: Settings) {
         runner.reloadDestinationSettings(settings)
     }

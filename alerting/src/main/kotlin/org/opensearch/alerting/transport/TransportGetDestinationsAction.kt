@@ -32,6 +32,7 @@ import org.opensearch.action.search.SearchRequest
 import org.opensearch.action.search.SearchResponse
 import org.opensearch.action.support.ActionFilters
 import org.opensearch.action.support.HandledTransportAction
+import org.opensearch.alerting.action.AcknowledgeAlertResponse
 import org.opensearch.alerting.action.GetDestinationsAction
 import org.opensearch.alerting.action.GetDestinationsRequest
 import org.opensearch.alerting.action.GetDestinationsResponse
@@ -44,6 +45,7 @@ import org.opensearch.client.Client
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.Strings
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.settings.Settings
 import org.opensearch.common.xcontent.LoggingDeprecationHandler
 import org.opensearch.common.xcontent.NamedXContentRegistry
@@ -53,6 +55,8 @@ import org.opensearch.common.xcontent.XContentParserUtils
 import org.opensearch.common.xcontent.XContentType
 import org.opensearch.commons.ConfigConstants
 import org.opensearch.commons.authuser.User
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.index.query.Operator
 import org.opensearch.index.query.QueryBuilders
 import org.opensearch.rest.RestStatus
@@ -72,9 +76,10 @@ class TransportGetDestinationsAction @Inject constructor(
     clusterService: ClusterService,
     actionFilters: ActionFilters,
     val settings: Settings,
-    val xContentRegistry: NamedXContentRegistry
-) : HandledTransportAction<GetDestinationsRequest, GetDestinationsResponse> (
-    GetDestinationsAction.NAME, transportService, actionFilters, ::GetDestinationsRequest
+    val xContentRegistry: NamedXContentRegistry,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<GetDestinationsRequest, GetDestinationsResponse> (
+    GetDestinationsAction.NAME, transportService, actionFilters, ::GetDestinationsRequest, extensionService.isEsCluster
 ) {
 
     @Volatile private var filterByEnabled = AlertingSettings.FILTER_BY_BACKEND_ROLES.get(settings)
@@ -83,7 +88,7 @@ class TransportGetDestinationsAction @Inject constructor(
         clusterService.clusterSettings.addSettingsUpdateConsumer(AlertingSettings.FILTER_BY_BACKEND_ROLES) { filterByEnabled = it }
     }
 
-    override fun doExecute(
+    override fun doExecuteExtension(
         task: Task,
         getDestinationsRequest: GetDestinationsRequest,
         actionListener: ActionListener<GetDestinationsResponse>
@@ -189,5 +194,10 @@ class TransportGetDestinationsAction @Inject constructor(
                 }
             }
         )
+    }
+
+
+    override fun readFromStream(sin: StreamInput): GetDestinationsResponse {
+        return GetDestinationsResponse(sin)
     }
 }

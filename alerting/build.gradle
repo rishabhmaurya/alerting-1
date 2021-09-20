@@ -50,6 +50,7 @@ opensearchplugin {
     name 'opensearch-alerting'
     description 'Amazon OpenSearch alerting plugin'
     classname 'org.opensearch.alerting.AlertingPlugin'
+    extensionclassname 'org.opensearch.alerting.AlertingExt'
     extendedPlugins = ['lang-painless']
 }
 

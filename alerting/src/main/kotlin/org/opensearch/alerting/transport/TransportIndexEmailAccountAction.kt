@@ -39,6 +39,7 @@ import org.opensearch.action.search.SearchResponse
 import org.opensearch.action.support.ActionFilters
 import org.opensearch.action.support.HandledTransportAction
 import org.opensearch.action.support.master.AcknowledgedResponse
+import org.opensearch.alerting.action.GetAlertsResponse
 import org.opensearch.alerting.action.IndexEmailAccountAction
 import org.opensearch.alerting.action.IndexEmailAccountRequest
 import org.opensearch.alerting.action.IndexEmailAccountResponse
@@ -52,13 +53,17 @@ import org.opensearch.alerting.settings.DestinationSettings.Companion.ALLOW_LIST
 import org.opensearch.alerting.util.AlertingException
 import org.opensearch.alerting.util.DestinationType
 import org.opensearch.alerting.util.IndexUtils
+import org.opensearch.alerting.util.getClusterState
 import org.opensearch.client.Client
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.settings.Settings
 import org.opensearch.common.xcontent.NamedXContentRegistry
 import org.opensearch.common.xcontent.ToXContent
 import org.opensearch.common.xcontent.XContentFactory.jsonBuilder
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.index.query.QueryBuilders
 import org.opensearch.rest.RestRequest
 import org.opensearch.rest.RestStatus
@@ -75,9 +80,10 @@ class TransportIndexEmailAccountAction @Inject constructor(
     val scheduledJobIndices: ScheduledJobIndices,
     val clusterService: ClusterService,
     settings: Settings,
-    val xContentRegistry: NamedXContentRegistry
-) : HandledTransportAction<IndexEmailAccountRequest, IndexEmailAccountResponse>(
-    IndexEmailAccountAction.NAME, transportService, actionFilters, ::IndexEmailAccountRequest
+    val xContentRegistry: NamedXContentRegistry,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<IndexEmailAccountRequest, IndexEmailAccountResponse>(
+    IndexEmailAccountAction.NAME, transportService, actionFilters, ::IndexEmailAccountRequest, extensionService.isEsCluster
 ) {
 
     @Volatile private var requestTimeout = REQUEST_TIMEOUT.get(settings)
@@ -90,7 +96,7 @@ class TransportIndexEmailAccountAction @Inject constructor(
         clusterService.clusterSettings.addSettingsUpdateConsumer(ALLOW_LIST) { allowList = it }
     }
 
-    override fun doExecute(task: Task, request: IndexEmailAccountRequest, actionListener: ActionListener<IndexEmailAccountResponse>) {
+    override fun doExecuteExtension(task: Task, request: IndexEmailAccountRequest, actionListener: ActionListener<IndexEmailAccountResponse>) {
         client.threadPool().threadContext.stashContext().use {
             IndexEmailAccountHandler(client, actionListener, request).start()
         }
@@ -110,7 +116,7 @@ class TransportIndexEmailAccountAction @Inject constructor(
                     }
 
                     override fun onFailure(e: Exception) {
-                        actionListener.onFailure(e)
+                        //actionListener.onFailure(e)
                     }
                 })
             } else if (!IndexUtils.scheduledJobIndexUpdated) {
@@ -331,5 +337,9 @@ class TransportIndexEmailAccountAction @Inject constructor(
 
             return null
         }
+    }
+
+    override fun readFromStream(sin: StreamInput): IndexEmailAccountResponse {
+        return IndexEmailAccountResponse(sin)
     }
 }

@@ -59,34 +59,34 @@ ext {
     opendistroVersion = "${version}"
     isSnapshot = "true" == System.getProperty("build.snapshot", "true")
 }
+//
+//configurations {
+//    ktlint
+//}
+//
+//dependencies {
+//    add("ktlint", "com.pinterest:ktlint:0.41.0") {
+//        attributes {
+//            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling, Bundling.EXTERNAL))
+//        }
+//    }
+//}
 
-configurations {
-    ktlint
-}
+//task ktlint(type: JavaExec, group: "verification") {
+//    description = "Check Kotlin code style."
+//    main = "com.pinterest.ktlint.Main"
+//    classpath = configurations.ktlint
+//    args "alerting/**/*.kt", "elastic-api/**/*.kt", "core/**/*.kt"
+//}
+//
+//task ktlintFormat(type: JavaExec, group: "formatting") {
+//    description = "Fix Kotlin code style deviations."
+//    main = "com.pinterest.ktlint.Main"
+//    classpath = configurations.ktlint
+//    args "-F", "alerting/**/*.kt", "elastic-api/**/*.kt", "core/**/*.kt"
+//}
 
-dependencies {
-    add("ktlint", "com.pinterest:ktlint:0.41.0") {
-        attributes {
-            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling, Bundling.EXTERNAL))
-        }
-    }
-}
-
-task ktlint(type: JavaExec, group: "verification") {
-    description = "Check Kotlin code style."
-    main = "com.pinterest.ktlint.Main"
-    classpath = configurations.ktlint
-    args "alerting/**/*.kt", "elastic-api/**/*.kt", "core/**/*.kt"
-}
-
-task ktlintFormat(type: JavaExec, group: "formatting") {
-    description = "Fix Kotlin code style deviations."
-    main = "com.pinterest.ktlint.Main"
-    classpath = configurations.ktlint
-    args "-F", "alerting/**/*.kt", "elastic-api/**/*.kt", "core/**/*.kt"
-}
-
-check.dependsOn ktlint
+//check.dependsOn ktlint
 
 
 allprojects {
@@ -102,7 +102,7 @@ allprojects {
     }
     plugins.withId('org.jetbrains.kotlin.jvm') {
         compileKotlin.kotlinOptions.jvmTarget = compileTestKotlin.kotlinOptions.jvmTarget = "1.8"
-        compileKotlin.dependsOn ktlint
+        //compileKotlin.dependsOn ktlint
     }
 
 }

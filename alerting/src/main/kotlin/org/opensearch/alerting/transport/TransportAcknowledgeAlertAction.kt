@@ -15,6 +15,7 @@ import org.apache.logging.log4j.LogManager
 import org.opensearch.action.ActionListener
 import org.opensearch.action.bulk.BulkRequest
 import org.opensearch.action.bulk.BulkResponse
+import org.opensearch.action.delete.DeleteResponse
 import org.opensearch.action.search.SearchRequest
 import org.opensearch.action.search.SearchResponse
 import org.opensearch.action.support.ActionFilters
@@ -29,6 +30,7 @@ import org.opensearch.alerting.model.Alert
 import org.opensearch.alerting.util.AlertingException
 import org.opensearch.client.Client
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.xcontent.LoggingDeprecationHandler
 import org.opensearch.common.xcontent.NamedXContentRegistry
 import org.opensearch.common.xcontent.XContentFactory
@@ -36,6 +38,8 @@ import org.opensearch.common.xcontent.XContentHelper
 import org.opensearch.common.xcontent.XContentParser
 import org.opensearch.common.xcontent.XContentParserUtils
 import org.opensearch.common.xcontent.XContentType
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.index.query.QueryBuilders
 import org.opensearch.search.builder.SearchSourceBuilder
 import org.opensearch.tasks.Task
@@ -48,12 +52,13 @@ class TransportAcknowledgeAlertAction @Inject constructor(
     transportService: TransportService,
     val client: Client,
     actionFilters: ActionFilters,
-    val xContentRegistry: NamedXContentRegistry
-) : HandledTransportAction<AcknowledgeAlertRequest, AcknowledgeAlertResponse>(
-    AcknowledgeAlertAction.NAME, transportService, actionFilters, ::AcknowledgeAlertRequest
+    val xContentRegistry: NamedXContentRegistry,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<AcknowledgeAlertRequest, AcknowledgeAlertResponse>(
+    AcknowledgeAlertAction.NAME, transportService, actionFilters, ::AcknowledgeAlertRequest, extensionService.isEsCluster
 ) {
 
-    override fun doExecute(task: Task, request: AcknowledgeAlertRequest, actionListener: ActionListener<AcknowledgeAlertResponse>) {
+    override fun doExecuteExtension(task: Task, request: AcknowledgeAlertRequest, actionListener: ActionListener<AcknowledgeAlertResponse>) {
         client.threadPool().threadContext.stashContext().use {
             AcknowledgeHandler(client, actionListener, request).start()
         }
@@ -157,4 +162,9 @@ class TransportAcknowledgeAlertAction @Inject constructor(
             actionListener.onResponse(AcknowledgeAlertResponse(acknowledged.toList(), failed.toList(), missing.toList()))
         }
     }
+
+    override fun readFromStream(sin: StreamInput): AcknowledgeAlertResponse {
+        return AcknowledgeAlertResponse(sin)
+    }
+
 }

@@ -61,10 +61,12 @@ import org.opensearch.alerting.util.IndexUtils
 import org.opensearch.alerting.util.addUserBackendRolesFilter
 import org.opensearch.alerting.util.checkFilterByUserBackendRoles
 import org.opensearch.alerting.util.checkUserFilterByPermissions
+import org.opensearch.alerting.util.getClusterState
 import org.opensearch.alerting.util.isADMonitor
 import org.opensearch.client.Client
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.settings.Settings
 import org.opensearch.common.unit.TimeValue
 import org.opensearch.common.xcontent.LoggingDeprecationHandler
@@ -75,6 +77,8 @@ import org.opensearch.common.xcontent.XContentHelper
 import org.opensearch.common.xcontent.XContentType
 import org.opensearch.commons.ConfigConstants
 import org.opensearch.commons.authuser.User
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.index.query.QueryBuilders
 import org.opensearch.rest.RestRequest
 import org.opensearch.rest.RestStatus
@@ -93,9 +97,10 @@ class TransportIndexMonitorAction @Inject constructor(
     val scheduledJobIndices: ScheduledJobIndices,
     val clusterService: ClusterService,
     val settings: Settings,
-    val xContentRegistry: NamedXContentRegistry
-) : HandledTransportAction<IndexMonitorRequest, IndexMonitorResponse>(
-    IndexMonitorAction.NAME, transportService, actionFilters, ::IndexMonitorRequest
+    val xContentRegistry: NamedXContentRegistry,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<IndexMonitorRequest, IndexMonitorResponse>(
+    IndexMonitorAction.NAME, transportService, actionFilters, ::IndexMonitorRequest, extensionService.isEsCluster
 ) {
 
     @Volatile private var maxMonitors = ALERTING_MAX_MONITORS.get(settings)
@@ -106,15 +111,15 @@ class TransportIndexMonitorAction @Inject constructor(
     @Volatile private var filterByEnabled = AlertingSettings.FILTER_BY_BACKEND_ROLES.get(settings)
 
     init {
-        clusterService.clusterSettings.addSettingsUpdateConsumer(ALERTING_MAX_MONITORS) { maxMonitors = it }
-        clusterService.clusterSettings.addSettingsUpdateConsumer(REQUEST_TIMEOUT) { requestTimeout = it }
-        clusterService.clusterSettings.addSettingsUpdateConsumer(INDEX_TIMEOUT) { indexTimeout = it }
-        clusterService.clusterSettings.addSettingsUpdateConsumer(MAX_ACTION_THROTTLE_VALUE) { maxActionThrottle = it }
-        clusterService.clusterSettings.addSettingsUpdateConsumer(ALLOW_LIST) { allowList = it }
-        clusterService.clusterSettings.addSettingsUpdateConsumer(FILTER_BY_BACKEND_ROLES) { filterByEnabled = it }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(ALERTING_MAX_MONITORS, true) { maxMonitors = it }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(REQUEST_TIMEOUT, true) { requestTimeout = it }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(INDEX_TIMEOUT, true) { indexTimeout = it }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(MAX_ACTION_THROTTLE_VALUE, true) { maxActionThrottle = it }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(ALLOW_LIST, true) { allowList = it }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(FILTER_BY_BACKEND_ROLES, true) { filterByEnabled = it }
     }
 
-    override fun doExecute(task: Task, request: IndexMonitorRequest, actionListener: ActionListener<IndexMonitorResponse>) {
+    override fun doExecuteExtension(task: Task, request: IndexMonitorRequest, actionListener: ActionListener<IndexMonitorResponse>) {
 
         val userStr = client.threadPool().threadContext.getTransient<String>(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT)
         log.debug("User and roles string from thread context: $userStr")
@@ -265,7 +270,7 @@ class TransportIndexMonitorAction @Inject constructor(
                         onCreateMappingsResponse(response)
                     }
                     override fun onFailure(t: Exception) {
-                        actionListener.onFailure(AlertingException.wrap(t))
+                        //actionListener.onFailure(AlertingException.wrap(t))
                     }
                 })
             } else if (!IndexUtils.scheduledJobIndexUpdated) {
@@ -512,5 +517,9 @@ class TransportIndexMonitorAction @Inject constructor(
             }
             return null
         }
+    }
+
+    override fun readFromStream(sin: StreamInput): IndexMonitorResponse {
+        return IndexMonitorResponse(sin)
     }
 }

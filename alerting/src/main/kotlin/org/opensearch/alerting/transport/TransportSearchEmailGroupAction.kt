@@ -32,6 +32,7 @@ import org.opensearch.action.search.SearchRequest
 import org.opensearch.action.search.SearchResponse
 import org.opensearch.action.support.ActionFilters
 import org.opensearch.action.support.HandledTransportAction
+import org.opensearch.alerting.action.GetEmailGroupResponse
 import org.opensearch.alerting.action.SearchEmailGroupAction
 import org.opensearch.alerting.settings.DestinationSettings.Companion.ALLOW_LIST
 import org.opensearch.alerting.util.AlertingException
@@ -39,7 +40,10 @@ import org.opensearch.alerting.util.DestinationType
 import org.opensearch.client.Client
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.inject.Inject
+import org.opensearch.common.io.stream.StreamInput
 import org.opensearch.common.settings.Settings
+import org.opensearch.extensions.ExtensionService
+import org.opensearch.extensions.ExtensionTransportAction
 import org.opensearch.rest.RestStatus
 import org.opensearch.tasks.Task
 import org.opensearch.transport.TransportService
@@ -49,9 +53,10 @@ class TransportSearchEmailGroupAction @Inject constructor(
     val client: Client,
     actionFilters: ActionFilters,
     val clusterService: ClusterService,
-    settings: Settings
-) : HandledTransportAction<SearchRequest, SearchResponse>(
-    SearchEmailGroupAction.NAME, transportService, actionFilters, ::SearchRequest
+    settings: Settings,
+    extensionService: ExtensionService
+) : ExtensionTransportAction<SearchRequest, SearchResponse>(
+    SearchEmailGroupAction.NAME, transportService, actionFilters, ::SearchRequest, extensionService.isEsCluster
 ) {
 
     @Volatile private var allowList = ALLOW_LIST.get(settings)
@@ -60,7 +65,7 @@ class TransportSearchEmailGroupAction @Inject constructor(
         clusterService.clusterSettings.addSettingsUpdateConsumer(ALLOW_LIST) { allowList = it }
     }
 
-    override fun doExecute(task: Task, searchRequest: SearchRequest, actionListener: ActionListener<SearchResponse>) {
+    override fun doExecuteExtension(task: Task, searchRequest: SearchRequest, actionListener: ActionListener<SearchResponse>) {
 
         if (!allowList.contains(DestinationType.EMAIL.value)) {
             actionListener.onFailure(
@@ -88,5 +93,9 @@ class TransportSearchEmailGroupAction @Inject constructor(
                 }
             )
         }
+    }
+
+    override fun readFromStream(sin: StreamInput): SearchResponse {
+        return SearchResponse(sin)
     }
 }

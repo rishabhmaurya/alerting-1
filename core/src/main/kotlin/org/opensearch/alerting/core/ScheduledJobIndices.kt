@@ -27,14 +27,18 @@
 package org.opensearch.alerting.core
 
 import org.opensearch.action.ActionListener
+import org.opensearch.action.admin.cluster.state.ClusterStateRequest
 import org.opensearch.action.admin.indices.create.CreateIndexRequest
 import org.opensearch.action.admin.indices.create.CreateIndexResponse
+import org.opensearch.action.support.IndicesOptions
 import org.opensearch.alerting.core.model.ScheduledJob
 import org.opensearch.client.AdminClient
+import org.opensearch.cluster.ClusterState
 import org.opensearch.cluster.health.ClusterIndexHealth
 import org.opensearch.cluster.service.ClusterService
 import org.opensearch.common.settings.Settings
 import org.opensearch.common.xcontent.XContentType
+import org.opensearch.threadpool.ThreadPool
 
 /**
  * Initialize the OpenSearch components required to run [ScheduledJobs].
@@ -67,7 +71,7 @@ class ScheduledJobIndices(private val client: AdminClient, private val clusterSe
 
     fun scheduledJobIndexExists(): Boolean {
         val clusterState = clusterService.state()
-        return clusterState.routingTable.hasIndex(ScheduledJob.SCHEDULED_JOBS_INDEX)
+        return clusterState.metadata.hasIndex(ScheduledJob.SCHEDULED_JOBS_INDEX)
     }
 
     /**

@@ -52,6 +52,7 @@ import org.opensearch.alerting.settings.AlertingSettings.Companion.ALERT_HISTORY
 import org.opensearch.alerting.settings.AlertingSettings.Companion.ALERT_HISTORY_ROLLOVER_PERIOD
 import org.opensearch.alerting.settings.AlertingSettings.Companion.REQUEST_TIMEOUT
 import org.opensearch.alerting.util.IndexUtils
+import org.opensearch.alerting.util.getClusterState
 import org.opensearch.client.Client
 import org.opensearch.cluster.ClusterChangedEvent
 import org.opensearch.cluster.ClusterStateListener
@@ -78,21 +79,20 @@ class AlertIndices(
     private val client: Client,
     private val threadPool: ThreadPool,
     private val clusterService: ClusterService
-) : ClusterStateListener {
+) {
 
     init {
-        clusterService.addListener(this)
-        clusterService.clusterSettings.addSettingsUpdateConsumer(ALERT_HISTORY_ENABLED) { historyEnabled = it }
-        clusterService.clusterSettings.addSettingsUpdateConsumer(ALERT_HISTORY_MAX_DOCS) { historyMaxDocs = it }
-        clusterService.clusterSettings.addSettingsUpdateConsumer(ALERT_HISTORY_INDEX_MAX_AGE) { historyMaxAge = it }
-        clusterService.clusterSettings.addSettingsUpdateConsumer(ALERT_HISTORY_ROLLOVER_PERIOD) {
+        clusterService.clusterSettings.addSettingsUpdateConsumer(ALERT_HISTORY_ENABLED, true) { historyEnabled = it }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(ALERT_HISTORY_MAX_DOCS, true) { historyMaxDocs = it }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(ALERT_HISTORY_INDEX_MAX_AGE, true) { historyMaxAge = it }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(ALERT_HISTORY_ROLLOVER_PERIOD, true) {
             historyRolloverPeriod = it
-            rescheduleRollover()
+            //rescheduleRollover()
         }
-        clusterService.clusterSettings.addSettingsUpdateConsumer(AlertingSettings.ALERT_HISTORY_RETENTION_PERIOD) {
+        clusterService.clusterSettings.addSettingsUpdateConsumer(AlertingSettings.ALERT_HISTORY_RETENTION_PERIOD, true) {
             historyRetentionPeriod = it
         }
-        clusterService.clusterSettings.addSettingsUpdateConsumer(REQUEST_TIMEOUT) { requestTimeout = it }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(REQUEST_TIMEOUT, true) { requestTimeout = it }
     }
 
     companion object {
@@ -170,6 +170,7 @@ class AlertIndices(
         return ThreadPool.Names.MANAGEMENT
     }
 
+    /*
     override fun clusterChanged(event: ClusterChangedEvent) {
         // Instead of using a LocalNodeMasterListener to track master changes, this service will
         // track them here to avoid conditions where master listener events run after other
@@ -186,9 +187,10 @@ class AlertIndices(
         // if the indexes have been deleted they need to be reinitialized
         alertIndexInitialized = event.state().routingTable().hasIndex(ALERT_INDEX)
         historyIndexInitialized = event.state().metadata().hasAlias(HISTORY_WRITE_INDEX)
-    }
+    }*/
 
     private fun rescheduleRollover() {
+        //#Use: to check if current node is elected master
         if (clusterService.state().nodes.isLocalNodeElectedMaster) {
             scheduledRollover?.cancel()
             scheduledRollover = threadPool
@@ -315,7 +317,7 @@ class AlertIndices(
             .clear()
             .indices(HISTORY_ALL)
             .metadata(true)
-            .local(true)
+            //.local(true)
             .indicesOptions(IndicesOptions.strictExpand())
 
         client.admin().cluster().state(

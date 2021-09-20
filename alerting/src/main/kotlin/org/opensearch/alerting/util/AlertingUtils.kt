@@ -29,9 +29,15 @@ package org.opensearch.alerting.util
 import inet.ipaddr.IPAddressString
 import org.opensearch.OpenSearchStatusException
 import org.opensearch.action.ActionListener
+import org.opensearch.action.admin.cluster.state.ClusterStateRequest
+import org.opensearch.action.admin.cluster.state.ClusterStateResponse
+import org.opensearch.action.support.IndicesOptions
+import org.opensearch.alerting.alerts.AlertIndices
 import org.opensearch.alerting.destination.message.BaseMessage
 import org.opensearch.alerting.model.destination.Destination
 import org.opensearch.alerting.settings.DestinationSettings
+import org.opensearch.client.Client
+import org.opensearch.cluster.ClusterState
 import org.opensearch.commons.authuser.User
 import org.opensearch.rest.RestStatus
 
@@ -138,4 +144,14 @@ fun <T : Any> checkUserFilterByPermissions(
         return false
     }
     return true
+}
+
+fun getClusterState(client: Client): ClusterState {
+    val clusterStateRequest = ClusterStateRequest()
+        .clear()
+        .metadata(true)
+        //.local(true)
+        .indicesOptions(IndicesOptions.strictExpand())
+
+    return client.admin().cluster().state(clusterStateRequest).get().state
 }
